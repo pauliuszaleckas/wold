@@ -4,13 +4,11 @@
 #include <string.h>
 #include <errno.h>
 
-#define BUFLEN 256
-
 int main(int argc, char *argv[])
 {
 	int sfd;
 	struct sockaddr_in si;
-	char buf[BUFLEN];
+	char buf[256];
 
 	sfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (sfd == -1) {
@@ -31,7 +29,7 @@ int main(int argc, char *argv[])
 	while (1) {
 		int len;
 
-		len = recvfrom(sfd, buf, BUFLEN, 0, NULL, NULL);
+		len = recvfrom(sfd, buf, sizeof(buf), 0, NULL, NULL);
 		if (len == -1) {
 			perror("Error while reading socket");
 			return errno;
