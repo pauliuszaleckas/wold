@@ -42,10 +42,6 @@ static void listen_wol(uint16_t port)
 	}
 }
 
-static void daemonize(void)
-{
-}
-
 static void usage(char *app)
 {
 	fprintf(stderr, "Usage: %s [-p port] [-f]\n", app);
@@ -78,7 +74,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (!foreground)
-		daemonize();
+		daemon(0, 0);
 
 	listen_wol((uint16_t)port);
 
