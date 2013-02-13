@@ -19,6 +19,7 @@ static void listen_wol(uint16_t port)
 	int sfd;
 	struct sockaddr_in si;
 	char buf[256];
+	const char sync[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 	sfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (sfd == -1)
@@ -39,7 +40,16 @@ static void listen_wol(uint16_t port)
 		if (len == -1)
 			err_handler("Error while reading socket");
 
-		syslog(LOG_INFO, "Received data, len=%u\n", len);
+		if (len < 102) {
+			syslog(LOG_WARNING, "Received packet too short: %u", len);
+		}
+
+		if (memcmp(sync, buf, 6)) {
+			syslog(LOG_WARNING, "Received non WOL packet");
+		}
+
+		syslog(LOG_INFO, "Received WOL packet");
+
 	}
 }
 
