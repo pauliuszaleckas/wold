@@ -6,6 +6,13 @@
 #include <netinet/ip.h>
 #include <string.h>
 #include <errno.h>
+#include <syslog.h>
+
+static void err_handler(char *err)
+{
+	syslog(LOG_ERR, "%s: %m", err);
+	exit(errno);
+}
 
 static void listen_wol(uint16_t port)
 {
@@ -14,37 +21,31 @@ static void listen_wol(uint16_t port)
 	char buf[256];
 
 	sfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	if (sfd == -1) {
-		perror("Failed to open socket");
-		exit(errno);
-	}
+	if (sfd == -1)
+		err_handler("Failed to open socket");
 
 	memset(&si, 0, sizeof(si));
 	si.sin_family = AF_INET;
 	si.sin_port = htons(port);
 	si.sin_addr.s_addr = htonl(INADDR_ANY);
 
-	if (bind(sfd, (struct sockaddr *)&si, sizeof(si)) == -1) {
-		perror("Failed open port");
-		exit(errno);
-	}
+	if (bind(sfd, (struct sockaddr *)&si, sizeof(si)) == -1)
+		err_handler("Failed open port");
 
 	while (1) {
 		int len;
 
 		len = recvfrom(sfd, buf, sizeof(buf), 0, NULL, NULL);
-		if (len == -1) {
-			perror("Error while reading socket");
-			exit(errno);
-		}
+		if (len == -1)
+			err_handler("Error while reading socket");
 
-		printf("Received data, len=%u\n", len);
+		syslog(LOG_INFO, "Received data, len=%u\n", len);
 	}
 }
 
-static void usage(char *app)
+static void usage()
 {
-	fprintf(stderr, "Usage: %s [-p port] [-f]\n", app);
+	fprintf(stderr, "Usage: wold [-p port] [-f]\n");
 	fprintf(stderr, "\t-p\tport to listen for WOL packet (default: 9)\n");
 	fprintf(stderr, "\t-f\tstay in foreground\n");
 }
@@ -68,13 +69,20 @@ int main(int argc, char *argv[])
 				foreground = 1;
 				break;
 			default:
-				usage(argv[0]);
+				usage();
 				exit(EXIT_FAILURE);
 		}
 	}
 
-	if (!foreground)
-		daemon(0, 0);
+	if (!foreground) {
+		if (daemon(0, 0) < 0) {
+			perror("Failed to daemonize");
+			exit(errno);
+		}
+
+		openlog("wold", LOG_PID, LOG_DAEMON);
+	} else
+		openlog("wold", LOG_PERROR | LOG_PID, LOG_DAEMON);
 
 	listen_wol((uint16_t)port);
 
