@@ -8,8 +8,10 @@
 #include <string.h>
 #include <errno.h>
 #include <syslog.h>
+#include <pwd.h>
 
 static char *action = "/etc/wol.action";
+static uid_t action_uid = -1;
 
 static void err_handler(char *err)
 {
@@ -17,11 +19,35 @@ static void err_handler(char *err)
 	exit(errno);
 }
 
+static uid_t name_to_uid(char const *name)
+{
+	const long buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
+	struct passwd pwbuf, *pwbufp;
+	char *buf;
+
+	if (!name)
+		return -1;
+
+	if (buflen == -1)
+		return -1;
+
+	buf = malloc(buflen);
+	if (!buf)
+		return -1;
+
+	if (getpwnam_r(name, &pwbuf, buf, buflen, &pwbufp) || !pwbufp)
+		return -1;
+
+	free(buf);
+
+	return pwbufp->pw_uid;
+}
+
 static int run_action(void)
 {
 	pid_t pid;
 	int rv;
-	int commpipe[2];		/* This holds the fd for the input & output of the pipe */
+	int commpipe[2]; /* This holds the fd for the input & output of the pipe */
 
 	/* Setup communication pipeline first */
 	if (pipe(commpipe))
@@ -35,14 +61,20 @@ static int run_action(void)
 	if (pid) {
 		/* A positive (non-negative) PID indicates the parent process */
 		dup2(commpipe[1],1);	/* Replace stdout with out side of the pipe */
-		close(commpipe[0]);		/* Close unused side of pipe (in side) */
+		close(commpipe[0]);	/* Close unused side of pipe (in side) */
 		setvbuf(stdout,(char*)NULL,_IONBF,0);	/* Set non-buffered output on stdout */
 		wait(&rv);				/* Wait for child process to end */
 		return rv;
 	} else {
 		/* A zero PID indicates that this is the child process */
 		dup2(commpipe[0], 0);	/* Replace stdin with the in side of the pipe */
-		close(commpipe[1]);		/* Close unused side of pipe (out side) */
+		close(commpipe[1]);	/* Close unused side of pipe (out side) */
+
+		/* Run action as different user */
+		if (action_uid != -1)
+			if (setuid(action_uid))
+				err_handler("Failed to change user");
+
 		/* Replace the child fork with a new process */
 		if (execl(action, action, NULL) == -1)
 			err_handler("Failed to run action");
@@ -94,8 +126,10 @@ static void listen_wol(uint16_t port)
 static void usage()
 {
 	fprintf(stderr, "Usage: wold [-p port] [-f]\n");
-	fprintf(stderr, "\t-p\tport to listen for WOL packet (default: 9)\n");
+	fprintf(stderr, "\t-p port\tport to listen for WOL packet (default: 9)\n");
 	fprintf(stderr, "\t-f\tstay in foreground\n");
+	fprintf(stderr, "\t-a action\tapplication to run on WOL (default: /etc/wol.action)\n");
+	fprintf(stderr, "\t-u username\trun action as different user\n");
 }
 
 int main(int argc, char *argv[])
@@ -104,7 +138,7 @@ int main(int argc, char *argv[])
 	int foreground = 0;
 	unsigned long int port = 9;
 
-	while ((opt = getopt(argc, argv, "p:fa:")) != -1) {
+	while ((opt = getopt(argc, argv, "p:fa:u:")) != -1) {
 		switch (opt) {
 			case 'p':
 				port = strtoul(optarg, NULL, 0);
@@ -118,6 +152,13 @@ int main(int argc, char *argv[])
 				break;
 			case 'a':
 				action = strdup(optarg);
+				break;
+			case 'u':
+				action_uid = name_to_uid(optarg);
+				if (action_uid == -1) {
+					fprintf(stderr, "User %s not found\n", optarg);
+					exit(EXIT_FAILURE);
+				}
 				break;
 			default:
 				usage();
