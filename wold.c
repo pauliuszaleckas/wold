@@ -11,7 +11,8 @@
 #include <pwd.h>
 
 static char *action = "/etc/wol.action";
-static uid_t action_uid = -1;
+static struct passwd action_passwd;
+static char *user_env[32];
 
 static void err_handler(char *err)
 {
@@ -19,7 +20,7 @@ static void err_handler(char *err)
 	exit(errno);
 }
 
-static uid_t name_to_uid(char const *name)
+static int name_to_passwd(char const *name)
 {
 	const long buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
 	struct passwd pwbuf, *pwbufp;
@@ -35,12 +36,60 @@ static uid_t name_to_uid(char const *name)
 	if (!buf)
 		return -1;
 
-	if (getpwnam_r(name, &pwbuf, buf, buflen, &pwbufp) || !pwbufp)
+	/* On error always sets pwbufp to NULL */
+	getpwnam_r(name, &pwbuf, buf, buflen, &pwbufp);
+	if (!pwbufp)
 		return -1;
 
-	free(buf);
+	memcpy(&action_passwd, pwbufp, sizeof(*pwbufp));
 
-	return pwbufp->pw_uid;
+	/* don't free the buffer as it will free data pointed by action_passwd elements */
+	// free(buf);
+
+	return 0;
+}
+
+static char *set_env_var(const char *name, const char *value)
+{
+	char buff[256];
+	int len;
+
+	if (!value)
+		return NULL;
+
+	len = snprintf(buff, sizeof(buff), "%s=%s", name, value);
+	/* fail on error and if output was truncated */
+	if ((len < 0) || len >= sizeof(buff))
+		return NULL;
+
+	return strdup(buff);
+}
+
+static void setup_user_env()
+{
+	int i = 0;
+
+	/*
+	 * Setup environment for action user
+	 * Maximum 32 variables (if need more increase at the user_env declaration)
+	 */
+	user_env[i++] = set_env_var("PATH", "/bin:/usr/bin");
+	user_env[i++] = set_env_var("IFS", " \t\n");
+	user_env[i++] = set_env_var("USER", action_passwd.pw_name);
+	user_env[i++] = set_env_var("USERNAME", action_passwd.pw_name);
+	user_env[i++] = set_env_var("LOGNAME", action_passwd.pw_name);
+	user_env[i++] = set_env_var("HOME", action_passwd.pw_dir);
+	user_env[i++] = set_env_var("SHELL", action_passwd.pw_shell);
+	/* Copy DISPLAY (if available) for GUI apps */
+	if (getenv("DISPLAY"))
+		user_env[i++] = set_env_var("DISPLAY", getenv("DISPLAY"));
+
+	/* check if all variables were set correctly */
+	while (i--)
+		if (!user_env[i]) {
+			fprintf(stderr, "Failed to generate action user environment.\n");
+			exit(EXIT_FAILURE);
+		}	
 }
 
 static int run_action(void)
@@ -71,12 +120,15 @@ static int run_action(void)
 		close(commpipe[1]);	/* Close unused side of pipe (out side) */
 
 		/* Run action as different user */
-		if (action_uid != -1)
-			if (setuid(action_uid))
-				err_handler("Failed to change user");
+		if (setgid(action_passwd.pw_gid) || setuid(action_passwd.pw_uid))
+			err_handler("Failed to change user");
+
+		/* change workinf dir to user HOME */
+		if (chdir(action_passwd.pw_dir))
+			err_handler("Failed to change working directory");
 
 		/* Replace the child fork with a new process */
-		if (execl(action, action, NULL) == -1)
+		if (execle(action, action, NULL, user_env) == -1)
 			err_handler("Failed to run action");
 	}
 
@@ -125,21 +177,29 @@ static void listen_wol(uint16_t port)
 
 static void usage()
 {
-	fprintf(stderr, "Usage: wold [-p port] [-f]\n");
+	fprintf(stderr, "Usage: wold -u user [-p port] [-a action] [-f]\n");
+	fprintf(stderr, "\t-u username\trun action as different user (required)\n");
 	fprintf(stderr, "\t-p port\tport to listen for WOL packet (default: 9)\n");
 	fprintf(stderr, "\t-f\tstay in foreground\n");
 	fprintf(stderr, "\t-a action\tapplication to run on WOL (default: /etc/wol.action)\n");
-	fprintf(stderr, "\t-u username\trun action as different user\n");
 }
 
 int main(int argc, char *argv[])
 {
 	int opt;
 	int foreground = 0;
+	int user_set = 0;
 	unsigned long int port = 9;
 
-	while ((opt = getopt(argc, argv, "p:fa:u:")) != -1) {
+	while ((opt = getopt(argc, argv, "u:p:fa:")) != -1) {
 		switch (opt) {
+			case 'u':
+				if (name_to_passwd(optarg)) {
+					fprintf(stderr, "User %s not found\n", optarg);
+					exit(EXIT_FAILURE);
+				}
+				user_set = 1;
+				break;
 			case 'p':
 				port = strtoul(optarg, NULL, 0);
 				if (port > USHRT_MAX) {
@@ -153,18 +213,18 @@ int main(int argc, char *argv[])
 			case 'a':
 				action = strdup(optarg);
 				break;
-			case 'u':
-				action_uid = name_to_uid(optarg);
-				if (action_uid == -1) {
-					fprintf(stderr, "User %s not found\n", optarg);
-					exit(EXIT_FAILURE);
-				}
-				break;
 			default:
 				usage();
 				exit(EXIT_FAILURE);
 		}
 	}
+
+	if (!user_set) {
+		fprintf(stderr, "User to run action not provided. It is required.\n");
+		exit(EXIT_FAILURE);
+	}
+
+	setup_user_env();
 
 	if (access(action, X_OK)) {
 		fprintf(stderr, "%s: %s\n", action, strerror(errno));
