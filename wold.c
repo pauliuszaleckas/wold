@@ -164,10 +164,12 @@ static void listen_wol(uint16_t port)
 
 		if (len < 102) {
 			syslog(LOG_WARNING, "Received packet too short: %u", len);
+			continue;
 		}
 
 		if (memcmp(sync, buf, 6)) {
 			syslog(LOG_WARNING, "Received non WOL packet");
+			continue;
 		}
 
 		syslog(LOG_INFO, "Received WOL packet");
