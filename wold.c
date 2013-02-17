@@ -202,8 +202,8 @@ static void usage()
 {
 	fprintf(stderr, "Usage: wold -u user [-p port] [-a action] [-f]\n");
 	fprintf(stderr, "\t-u username\trun action as different user (required)\n");
-	fprintf(stderr, "\t-p port\tport to listen for WOL packet (default: 9)\n");
-	fprintf(stderr, "\t-f\tstay in foreground\n");
+	fprintf(stderr, "\t-p port\t\tport to listen for WOL packet (default: 9)\n");
+	fprintf(stderr, "\t-f\t\tstay in foreground\n");
 	fprintf(stderr, "\t-a action\tapplication to run on WOL (default: /etc/wol.action)\n");
 }
 
