@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
 	int user_set = 0;
 	unsigned long int port = 9;
 
-	while ((opt = getopt(argc, argv, "u:p:fa:")) != -1) {
+	while ((opt = getopt(argc, argv, "u:p:fa:h")) != -1) {
 		switch (opt) {
 			case 'u':
 				if (name_to_passwd(optarg)) {
@@ -236,6 +236,7 @@ int main(int argc, char *argv[])
 			case 'a':
 				action = strdup(optarg);
 				break;
+			case 'h':
 			default:
 				usage();
 				exit(EXIT_FAILURE);
