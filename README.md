@@ -30,3 +30,6 @@ Usage: wold -u user [-p port] [-a action] [-f]
 	-f			stay in foreground
 	-a action	application to run on WOL (default: /etc/wol.action)
 ```
+In my case I put this line into */etc/rc.local*:
+
+`DISPLAY=:0.0 wold -u xxx -a /home/xxx/XBMC.sh`
