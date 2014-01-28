@@ -4,8 +4,8 @@ wold
 Very simple Wake-on-Lan packet handler with custom action execution.
 
 ## Scratch your own itch
-I statrted coding this small app to make XBMC start on my PC when "Power On" is pressed on Android remote control.
-It is posible to wake my PC from suspend, but it boots to XFCE and second "Power On" turns on XBMC and disables VGA
+I started coding this small app to make XBMC start on my PC when "Power On" is pressed on Android remote control.
+It is possible to wake my PC from suspend, but it boots to XFCE and second "Power On" turns on XBMC and disables VGA
 while enabling HDMI output.
 
 ## Compiling/Installing
