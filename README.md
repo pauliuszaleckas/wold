@@ -39,4 +39,4 @@ To run XBMC (in raspbian), you can just put this line into */etc/rc.local*:
 
 `DISPLAY=:0.0 /usr/local/bin/wold -u pi -g video -a /usr/bin/xbmc`
 
-Restart you raspbian, then you will be able to start the XBMC using Yaste's power button.
+Restart your raspbian, then you will be able to start the XBMC using Yaste's power button.
