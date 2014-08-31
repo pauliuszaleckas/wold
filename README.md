@@ -5,7 +5,7 @@ Very simple Wake-on-Lan packet handler with custom action execution.
 
 ## Scratch your own itch
 ### My usage
-I have a raspberry pi with raspbian installed. I manually installed XBMC and wish to be able to start XBMC directly (without ssh in and start the XBMC manually) using the Power button in the (Yatse remote control app) [https://play.google.com/store/apps/details?id=org.leetzone.android.yatsewidgetfree] on my Android phone. I googled and found this program, afer modifying it a bit, my wish came true. To achieve this yourself, just follow the Compiling/Installing and Usage instuctions that follow
+I have a raspberry pi with raspbian installed. I manually installed XBMC and wish to be able to start XBMC directly (without ssh in and start the XBMC manually) using the Power button in the [Yatse remote control app] (https://play.google.com/store/apps/details?id=org.leetzone.android.yatsewidgetfree) on my Android phone. I googled and found this program, afer modifying it a bit, my wish came true. To achieve this yourself, just follow the Compiling/Installing and Usage instuctions that follow
 
 ### Original Usage (from the original author @pauliuszaleckas )
 I started coding this small app to make XBMC start on my PC when "Power On" is pressed on Android remote control.
