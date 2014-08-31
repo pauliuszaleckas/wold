@@ -23,17 +23,21 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
+#include <ctype.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <netinet/ip.h>
 #include <sys/wait.h>
 #include <string.h>
 #include <errno.h>
 #include <syslog.h>
 #include <pwd.h>
+#include <grp.h>
 
 static char *action = "/etc/wol.action";
 static struct passwd action_passwd;
 static char *user_env[32];
+static gid_t g_gid = -1;
 
 static void err_handler(char *err)
 {
@@ -110,12 +114,13 @@ static void setup_user_env()
 		if (!user_env[i]) {
 			fprintf(stderr, "Failed to generate action user environment.\n");
 			exit(EXIT_FAILURE);
-		}	
+		}
 }
 
 static int run_action(void)
 {
 	pid_t pid;
+	gid_t gid = g_gid;
 	int rv;
 	int commpipe[2]; /* This holds the fd for the input & output of the pipe */
 
@@ -141,7 +146,11 @@ static int run_action(void)
 		close(commpipe[1]);	/* Close unused side of pipe (out side) */
 
 		/* Run action as different user */
-		if (setgid(action_passwd.pw_gid) || setuid(action_passwd.pw_uid))
+		if (gid == (gid_t) -1) {
+			gid = action_passwd.pw_gid;
+		}
+
+		if (setgid(gid) || setuid(action_passwd.pw_uid))
 			err_handler("Failed to change user");
 
 		/* change workinf dir to user HOME */
@@ -200,8 +209,9 @@ static void listen_wol(uint16_t port)
 
 static void usage()
 {
-	fprintf(stderr, "Usage: wold -u user [-p port] [-a action] [-f]\n");
+	fprintf(stderr, "Usage: wold -u user [-g group] [-p port] [-a action] [-f]\n");
 	fprintf(stderr, "\t-u username\trun action as different user (required)\n");
+	fprintf(stderr, "\t-g group / gid\trun action as different group / gid\n");
 	fprintf(stderr, "\t-p port\t\tport to listen for WOL packet (default: 9)\n");
 	fprintf(stderr, "\t-f\t\tstay in foreground\n");
 	fprintf(stderr, "\t-a action\tapplication to run on WOL (default: /etc/wol.action)\n");
@@ -214,7 +224,7 @@ int main(int argc, char *argv[])
 	int user_set = 0;
 	unsigned long int port = 9;
 
-	while ((opt = getopt(argc, argv, "u:p:fa:h")) != -1) {
+	while ((opt = getopt(argc, argv, "u:g:p:fa:h")) != -1) {
 		switch (opt) {
 			case 'u':
 				if (name_to_passwd(optarg)) {
@@ -222,6 +232,21 @@ int main(int argc, char *argv[])
 					exit(EXIT_FAILURE);
 				}
 				user_set = 1;
+				break;
+			case 'g':
+				if(isdigit(optarg[0])) {
+					// passed in the group id in number
+					g_gid = atoi(optarg);
+				} else {
+					// passed in the group name
+					struct group* grp = getgrnam(optarg);
+					if (grp) {
+						g_gid = grp->gr_gid;
+					} else {
+						fprintf(stderr, "Group %s not found\n", optarg);
+						exit(EXIT_FAILURE);
+					}
+				}
 				break;
 			case 'p':
 				port = strtoul(optarg, NULL, 0);
