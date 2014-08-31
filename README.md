@@ -4,13 +4,13 @@ wold
 Very simple Wake-on-Lan packet handler with custom action execution.
 
 ## Scratch your own itch
-### My usage
-I have a raspberry pi with raspbian installed. I manually installed XBMC and wish to be able to start XBMC directly (without ssh in and start the XBMC manually) using the Power button in the [Yatse remote control app] (https://play.google.com/store/apps/details?id=org.leetzone.android.yatsewidgetfree) on my Android phone. I googled and found this program, afer modifying it a bit, my wish came true. To achieve this yourself, just follow the Compiling/Installing and Usage instuctions that follow
-
-### Original Usage (from the original author @pauliuszaleckas )
+### How it was born (by @pauliuszaleckas):
 I started coding this small app to make XBMC start on my PC when "Power On" is pressed on Android remote control.
 It is possible to wake my PC from suspend, but it boots to XFCE and second "Power On" turns on XBMC and disables VGA
 while enabling HDMI output.
+
+### Raspberry Pi usage (by @houtianze):
+I have a raspberry pi with raspbian installed. I manually installed XBMC and wish to be able to start XBMC directly (without ssh in and start the XBMC manually) using the Power button in the [Yatse remote control app] (https://play.google.com/store/apps/details?id=org.leetzone.android.yatsewidgetfree) on my Android phone. I googled and found this program, afer modifying it a bit, my wish came true. To achieve this yourself, just follow the Compiling/Installing and Usage instuctions that follow
 
 ## Compiling/Installing
 To compile:
@@ -35,6 +35,18 @@ Usage: wold -u user [-g group] [-p port] [-a action] [-f]
         -f              stay in foreground
         -a action       application to run on WOL (default: /etc/wol.action)
 ```
+### Linux PC with VGA and HDMI(to TV) example:
+Put this line into */etc/rc.local*:
+`DISPLAY=:0.0 wold -u xxx -a /home/xxx/XBMC.sh`
+
+In *XBMC.sh*
+```
+xrandr --output HDMI-0 --auto --output VGA-0 --off
+xbmc
+xrandr --output HDMI-0 --off --output VGA-0 --auto
+```
+
+### Raspbian example:
 To run XBMC (in raspbian), you can just put this line into */etc/rc.local*:
 
 `DISPLAY=:0.0 /usr/local/bin/wold -u pi -g video -a /usr/bin/xbmc`
