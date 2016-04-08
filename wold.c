@@ -19,6 +19,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+#include <sys/ioctl.h>
+#include <net/if.h> 
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -33,6 +35,9 @@
 #include <syslog.h>
 #include <pwd.h>
 #include <grp.h>
+#include <netinet/in.h>
+#include <string.h>
+
 
 static char *action = "/etc/wol.action";
 static struct passwd action_passwd;
@@ -43,6 +48,47 @@ static void err_handler(char *err)
 {
 	syslog(LOG_ERR, "%s: %m", err);
 	exit(errno);
+}
+
+/**
+ * Obtains the MAC address of the external NIC
+ * Method is courtesy of http://stackoverflow.com/questions/1779715/how-to-get-mac-address-of-your-machine-using-a-c-program 
+ */
+static void get_mac_address(unsigned char* mac_address)
+{
+    struct ifreq ifr;
+    struct ifconf ifc;
+    char buf[1024];
+    int success = 0;
+
+    memset(mac_address, 0, 6);
+
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (sock == -1) return;
+
+    ifc.ifc_len = sizeof(buf);
+    ifc.ifc_buf = buf;
+    if (ioctl(sock, SIOCGIFCONF, &ifc) == -1) return;
+
+    struct ifreq* it = ifc.ifc_req;
+    const struct ifreq* const end = it + (ifc.ifc_len / sizeof(struct ifreq));
+
+    for (; it != end; ++it) {
+        strcpy(ifr.ifr_name, it->ifr_name);
+        if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
+            if (! (ifr.ifr_flags & IFF_LOOPBACK)) { // don't count loopback
+                if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
+                    success = 1;
+                    break;
+                }
+            }
+        }
+        else { /* handle error */ }
+    }
+
+    if (success){
+	 memcpy(mac_address, ifr.ifr_hwaddr.sa_data, 6);
+    }
 }
 
 static int name_to_passwd(char const *name)
@@ -172,6 +218,9 @@ static void listen_wol(uint16_t port)
 	struct sockaddr_in si;
 	char buf[256];
 	const char sync[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+	unsigned char mac[6];
+	
+	get_mac_address(mac);
 
 	sfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (sfd == -1)
@@ -196,12 +245,14 @@ static void listen_wol(uint16_t port)
 			syslog(LOG_WARNING, "Received packet too short: %u", len);
 			continue;
 		}
-
 		if (memcmp(sync, buf, 6)) {
 			syslog(LOG_WARNING, "Received non WOL packet");
 			continue;
 		}
-
+		if (memcmp(mac, buf+6, 6)) {
+			syslog(LOG_WARNING, "Received WOL packet for other MAC");
+			continue;
+		}
 		syslog(LOG_INFO, "Received WOL packet");
 		syslog(LOG_INFO, "%s returned %i", action, run_action());
 	}
